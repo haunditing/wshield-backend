@@ -137,6 +137,15 @@ export class AuthService {
       throw new AppError("Usuario no encontrado", 404);
     }
 
+    if (user.plan !== 'PREMIUM') {
+      const now = new Date();
+      const lastChange = user.lastPasswordChangeDate ? new Date(user.lastPasswordChangeDate) : null;
+
+      if (lastChange && lastChange.toDateString() === now.toDateString()) {
+        throw new AppError("Solo puedes cambiar tu contraseña una vez al día con tu plan actual.", 429);
+      }
+    }
+
     const isMatch = await comparePassword(
       data.currentPassword,
       user.passwordHash,
@@ -147,6 +156,7 @@ export class AuthService {
 
     const hashedPassword = await hashPassword(data.newPassword);
     user.passwordHash = hashedPassword;
+    user.lastPasswordChangeDate = new Date();
     await user.save();
   }
 

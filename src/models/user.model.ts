@@ -11,6 +11,7 @@ export interface IUser extends Document {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  lastPasswordChangeDate?: Date;
 }
 
 const UserSchema = new Schema<IUser>(
@@ -36,6 +37,7 @@ const UserSchema = new Schema<IUser>(
     otpRequestsToday: { type: Number, default: 0 },
     lastOtpRequestDate: Date,
     isActive: { type: Boolean, default: true },
+    lastPasswordChangeDate: Date,
   },
   { timestamps: true }
 );
