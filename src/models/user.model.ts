@@ -6,6 +6,8 @@ export interface IUser extends Document {
   plan: 'FREE' | 'PREMIUM';
   otpCode?: string | undefined;
   otpExpires?: Date | undefined;
+  otpRequestsToday?: number;
+  lastOtpRequestDate?: Date;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -31,6 +33,8 @@ const UserSchema = new Schema<IUser>(
     },
     otpCode: String,
     otpExpires: Date,
+    otpRequestsToday: { type: Number, default: 0 },
+    lastOtpRequestDate: Date,
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

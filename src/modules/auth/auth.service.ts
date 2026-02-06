@@ -52,6 +52,19 @@ export class AuthService {
       return;
     }
 
+    // Rate Limiting: 1 envío + 1 reenvío = 2 intentos diarios
+    const now = new Date();
+    const lastRequest = user.lastOtpRequestDate ? new Date(user.lastOtpRequestDate) : null;
+
+    // Si es un nuevo día, reiniciamos el contador
+    if (!lastRequest || lastRequest.toDateString() !== now.toDateString()) {
+      user.otpRequestsToday = 0;
+    }
+
+    if ((user.otpRequestsToday || 0) >= 2) {
+      throw new AppError("Has alcanzado el límite diario de solicitudes (2 por día). Intenta mañana.", 429);
+    }
+
     // 1. Generar un OTP numérico de 6 dígitos
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -60,6 +73,10 @@ export class AuthService {
 
     // 3. Establecer una fecha de expiración (ej. 10 minutos)
     user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+    
+    // Actualizar contadores de uso
+    user.otpRequestsToday = (user.otpRequestsToday || 0) + 1;
+    user.lastOtpRequestDate = now;
     await user.save();
 
     console.log(
