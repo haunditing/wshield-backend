@@ -27,9 +27,7 @@ export const sendEmail = async (
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`[EmailService] Correo enviado: ${info.messageId}`);
   } catch (error) {
-    console.error("[EmailService] Error enviando correo:", error);
     // Dependiendo de tu lógica de negocio, podrías querer lanzar el error
     // throw new Error('No se pudo enviar el correo');
   }
