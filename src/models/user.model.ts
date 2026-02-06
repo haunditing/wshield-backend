@@ -4,6 +4,8 @@ export interface IUser extends Document {
   email: string;
   passwordHash: string;
   plan: 'FREE' | 'PREMIUM';
+  otpCode?: string | undefined;
+  otpExpires?: Date | undefined;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -27,6 +29,8 @@ const UserSchema = new Schema<IUser>(
       enum: ['FREE', 'PREMIUM'],
       default: 'FREE',
     },
+    otpCode: String,
+    otpExpires: Date,
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

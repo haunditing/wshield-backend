@@ -4,7 +4,12 @@ import { User } from "../../models/user.model";
 import { sendEmail } from "../../services/email.service";
 import { comparePassword, hashPassword } from "../../utils/hash";
 import { signToken } from "../../utils/jwt";
-import { ChangePasswordInput, LoginInput, RegisterInput, ResetPasswordInput } from "./auth.types";
+import {
+  ChangePasswordInput,
+  LoginInput,
+  RegisterInput,
+  ResetPasswordInput,
+} from "./auth.types";
 
 export class AuthService {
   async register(data: RegisterInput) {
@@ -47,47 +52,62 @@ export class AuthService {
       return;
     }
 
-    // 1. Generar un token aleatorio para el usuario
-    const resetToken = crypto.randomBytes(32).toString("hex");
+    // 1. Generar un OTP numérico de 6 dígitos
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 2. Hashear el token y guardarlo en la base de datos
-    (user as any).passwordResetToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
+    // 2. Hashear el OTP y guardarlo en la base de datos
+    user.otpCode = crypto.createHash("sha256").update(otp).digest("hex");
 
     // 3. Establecer una fecha de expiración (ej. 10 minutos)
-    (user as any).passwordResetExpires = Date.now() + 10 * 60 * 1000;
+    user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    // 4. Enviar el token SIN hashear al usuario por correo
-    const message = `Has solicitado recuperar tu contraseña en WShield.\n\nUsa este token para restablecerla: ${resetToken}\n\nEste token expira en 10 minutos.\n\nSi no solicitaste esto, ignora este mensaje.`;
+    console.log(
+      `[AuthService] Enviando OTP de recuperación a ${email}: ${otp}`,
+    );
 
+    const htmlContent = `
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+    <h2 style="color: #333; text-align: center;">Recuperación de Contraseña</h2>
+    <p style="color: #555; font-size: 16px;">Has solicitado recuperar tu contraseña en <strong>WShield</strong>.</p>
+    <p style="color: #555; font-size: 16px;">Usa el siguiente código de verificación para restablecerla:</p>
+    
+    <div style="text-align: center; margin: 30px 0; background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+      <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #007bff;">${otp}</span>
+    </div>
+
+    <p style="color: #999; font-size: 12px; text-align: center;">
+      Este código expira en 10 minutos.<br>
+      Si no solicitaste esto, ignora este mensaje.
+    </p>
+  </div>
+`;
     await sendEmail(
       user.email,
       "Recuperación de Contraseña - WShield",
-      message,
+      htmlContent,
     );
   }
 
   async resetPassword(data: ResetPasswordInput) {
-    const hashedToken = crypto
+    const hashedOtp = crypto
       .createHash("sha256")
-      .update(data.token)
+      .update(data.otp)
       .digest("hex");
 
     const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() },
+      email: data.email,
+      otpCode: hashedOtp,
+      otpExpires: { $gt: Date.now() },
     });
 
     if (!user) {
-      throw new AppError("El token es inválido o ha expirado", 400);
+      throw new AppError("El código es inválido o ha expirado", 400);
     }
 
     user.passwordHash = await hashPassword(data.newPassword);
-    (user as any).passwordResetToken = undefined;
-    (user as any).passwordResetExpires = undefined;
+    user.otpCode = undefined;
+    user.otpExpires = undefined;
     await user.save();
 
     const token = signToken({ userId: user.id, email: user.email });
