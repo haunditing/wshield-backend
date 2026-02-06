@@ -11,6 +11,9 @@ import {
   ResetPasswordInput,
 } from "./auth.types";
 
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCK_TIME = 15 * 60 * 1000; // 15 minutos
+
 export class AuthService {
   async register(data: RegisterInput) {
     const existingUser = await User.findOne({ email: data.email });
@@ -36,10 +39,35 @@ export class AuthService {
       throw new AppError("Credenciales inválidas", 401);
     }
 
+    // Verificar si la cuenta está bloqueada temporalmente
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      const remainingTime = Math.ceil(
+        (user.lockUntil.getTime() - Date.now()) / 60000,
+      );
+      throw new AppError(
+        `Cuenta bloqueada temporalmente. Intenta de nuevo en ${remainingTime} minutos.`,
+        429,
+      );
+    }
+
     const isMatch = await comparePassword(data.password, user.passwordHash);
     if (!isMatch) {
+      // Incrementar intentos fallidos
+      user.loginAttempts += 1;
+
+      // Si excede el límite, bloquear
+      if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+        user.lockUntil = new Date(Date.now() + LOCK_TIME);
+      }
+
+      await user.save();
       throw new AppError("Credenciales inválidas", 401);
     }
+
+    // Login exitoso: Resetear intentos y bloqueo
+    user.loginAttempts = 0;
+    user.lockUntil = undefined;
+    await user.save();
 
     const token = signToken({ userId: user.id, email: user.email });
     return { user: this.sanitizeUser(user), token };
@@ -54,7 +82,9 @@ export class AuthService {
 
     // Rate Limiting: 1 envío + 1 reenvío = 2 intentos diarios
     const now = new Date();
-    const lastRequest = user.lastOtpRequestDate ? new Date(user.lastOtpRequestDate) : null;
+    const lastRequest = user.lastOtpRequestDate
+      ? new Date(user.lastOtpRequestDate)
+      : null;
 
     // Si es un nuevo día, reiniciamos el contador
     if (!lastRequest || lastRequest.toDateString() !== now.toDateString()) {
@@ -62,7 +92,10 @@ export class AuthService {
     }
 
     if ((user.otpRequestsToday || 0) >= 2) {
-      throw new AppError("Has alcanzado el límite diario de solicitudes (2 por día). Intenta mañana.", 429);
+      throw new AppError(
+        "Has alcanzado el límite diario de solicitudes (2 por día). Intenta mañana.",
+        429,
+      );
     }
 
     // 1. Generar un OTP numérico de 6 dígitos
@@ -73,7 +106,7 @@ export class AuthService {
 
     // 3. Establecer una fecha de expiración (ej. 10 minutos)
     user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-    
+
     // Actualizar contadores de uso
     user.otpRequestsToday = (user.otpRequestsToday || 0) + 1;
     user.lastOtpRequestDate = now;
@@ -137,12 +170,17 @@ export class AuthService {
       throw new AppError("Usuario no encontrado", 404);
     }
 
-    if (user.plan !== 'PREMIUM') {
+    if (user.plan !== "PREMIUM") {
       const now = new Date();
-      const lastChange = user.lastPasswordChangeDate ? new Date(user.lastPasswordChangeDate) : null;
+      const lastChange = user.lastPasswordChangeDate
+        ? new Date(user.lastPasswordChangeDate)
+        : null;
 
       if (lastChange && lastChange.toDateString() === now.toDateString()) {
-        throw new AppError("Solo puedes cambiar tu contraseña una vez al día con tu plan actual.", 429);
+        throw new AppError(
+          "Solo puedes cambiar tu contraseña una vez al día con tu plan actual.",
+          429,
+        );
       }
     }
 

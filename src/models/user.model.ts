@@ -6,12 +6,14 @@ export interface IUser extends Document {
   plan: 'FREE' | 'PREMIUM';
   otpCode?: string | undefined;
   otpExpires?: Date | undefined;
-  otpRequestsToday?: number;
-  lastOtpRequestDate?: Date;
+  otpRequestsToday?: number | undefined;
+  lastOtpRequestDate?: Date | undefined;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  lastPasswordChangeDate?: Date;
+  lastPasswordChangeDate?: Date | undefined;
+  loginAttempts: number;
+  lockUntil?: Date | undefined;
 }
 
 const UserSchema = new Schema<IUser>(
@@ -38,6 +40,8 @@ const UserSchema = new Schema<IUser>(
     lastOtpRequestDate: Date,
     isActive: { type: Boolean, default: true },
     lastPasswordChangeDate: Date,
+    loginAttempts: { type: Number, default: 0 },
+    lockUntil: Date,
   },
   { timestamps: true }
 );
